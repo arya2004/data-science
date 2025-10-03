@@ -4,7 +4,7 @@ Toy Sales Regression Analysis
 This script performs Simple and Multiple Linear Regression analysis on toy sales data.
 
 Original: R notebook (08.ipynb)
-Converted to : Python 
+Converted to: Python script
 Date: October 3, 2025
 """
 
@@ -15,7 +15,7 @@ import seaborn as sns
 from sklearn.linear_model import LinearRegression
 from scipy import stats
 import argparse
-import os
+import sys
 
 
 def load_data(filepath):
@@ -34,17 +34,29 @@ def load_data(filepath):
     """
     try:
         df = pd.read_csv(filepath)
-        # Clean column names by removing trailing/leading spaces
+        # Clean column names (remove trailing/leading spaces)
         df.columns = df.columns.str.strip()
+        
+        print("\n" + "="*60)
+        print("TOY SALES REGRESSION ANALYSIS")
+        print("="*60)
+        print("Python implementation of R notebook analysis")
+        print("="*60)
         print("Data loaded successfully!")
-        print("\nFirst few rows of the dataset:")
+        print(f"\nFirst few rows of the dataset:")
         print(df.head())
-        print("\nDataset shape:", df.shape)
-        print("\nColumn names:", df.columns.tolist())
+        print(f"\nDataset shape: {df.shape}")
+        print(f"\nColumn names: {df.columns.tolist()}")
+        
         return df
+        
     except FileNotFoundError:
-        print(f"Error: File {filepath} not found!")
-        return None
+        print(f"Error: File '{filepath}' not found!")
+        print("Please ensure the dataset exists in the correct location.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error loading data: {e}")
+        sys.exit(1)
 
 
 def simple_linear_regression(df):
@@ -113,7 +125,7 @@ def simple_linear_regression(df):
         print("Decision: Reject H0 - Price significantly affects Unitsales")
     else:
         print(f"Result: p-value ({p_value:.6f}) >= α ({alpha})")
-        print("Decision: Fail to reject H0 - No significant effect")
+        print("Decision: Fail to reject H0 - No significant relationship")
     
     print("\nPredicted values (first 5):")
     print(predictions[:5])
@@ -124,7 +136,7 @@ def simple_linear_regression(df):
     return model, predictions, errors, (intercept, slope), r_squared, p_value
 
 
-def plot_simple_regression(df, predictions):
+def plot_simple_regression(df, predictions, save_path='simple_regression_plot.png'):
     """
     Create scatter plot with regression line for Simple Linear Regression.
     
@@ -134,6 +146,8 @@ def plot_simple_regression(df, predictions):
         DataFrame containing Price and Unitsales columns
     predictions : np.array
         Predicted values from the regression model
+    save_path : str
+        Path to save the plot
     """
     print("\n" + "="*60)
     print("CREATING VISUALIZATION")
@@ -143,25 +157,32 @@ def plot_simple_regression(df, predictions):
     
     # Scatter plot
     plt.scatter(df['Price'], df['Unitsales'], alpha=0.6, s=100, 
-                edgecolors='black', label='Actual Data')
+                color='steelblue', edgecolors='black', linewidth=0.5,
+                label='Actual Data')
     
     # Regression line
     plt.plot(df['Price'], predictions, color='red', linewidth=2, 
              label='Regression Line')
     
-    plt.xlabel('Price ($)', fontsize=12)
-    plt.ylabel('Unit Sales', fontsize=12)
-    plt.title('Simple Linear Regression: Unit Sales vs Price', fontsize=14, fontweight='bold')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
+    plt.xlabel('Price ($)', fontsize=12, fontweight='bold')
+    plt.ylabel('Unit Sales', fontsize=12, fontweight='bold')
+    plt.title('Simple Linear Regression: Unit Sales vs Price', 
+              fontsize=14, fontweight='bold')
+    plt.legend(fontsize=10)
+    plt.grid(True, alpha=0.3, linestyle='--')
+    
+    # Add equation to plot
+    model_temp = LinearRegression()
+    model_temp.fit(df[['Price']].values, df['Unitsales'].values)
+    equation = f'Unitsales = {model_temp.intercept_:.2f} + ({model_temp.coef_[0]:.2f}) × Price'
+    plt.text(0.05, 0.95, equation, transform=plt.gca().transAxes,
+             fontsize=10, verticalalignment='top',
+             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    
     plt.tight_layout()
-    
-    # Save the plot
-    output_path = '../datasets/simple_regression_plot.png'
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"\nPlot saved to: {output_path}")
-    
-    plt.show()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    print(f"\nPlot saved to: {save_path}")
+    plt.close()
 
 
 def multiple_linear_regression(df):
@@ -171,24 +192,32 @@ def multiple_linear_regression(df):
     Parameters:
     -----------
     df : pd.DataFrame
-        DataFrame containing all predictor and response variables
+        DataFrame containing all predictor columns
         
     Returns:
     --------
-    LinearRegression
-        Fitted multiple regression model
+    tuple
+        (model, predictions, r_squared, coefficients_info)
     """
     print("\n" + "="*60)
-    print("MULTIPLE LINEAR REGRESSION: Unitsales ~ Price + Adexp + Promexp")
+    print("MULTIPLE LINEAR REGRESSION")
+    print("Unitsales ~ Price + Adexp + Promexp")
     print("="*60)
     
     # Prepare data
     X = df[['Price', 'Adexp', 'Promexp']].values
     y = df['Unitsales'].values
+    feature_names = ['Price', 'Adexp', 'Promexp']
     
     # Fit the model
     model = LinearRegression()
     model.fit(X, y)
+    
+    # Get predictions
+    predictions = model.predict(X)
+    
+    # Calculate errors
+    errors = y - predictions
     
     # Get coefficients
     intercept = model.intercept_
@@ -197,158 +226,186 @@ def multiple_linear_regression(df):
     # Calculate R-squared
     r_squared = model.score(X, y)
     
-    # Calculate p-values for each coefficient
-    predictions = model.predict(X)
-    residuals = y - predictions
+    # Calculate statistics for each coefficient
     n = len(y)
-    p = X.shape[1]  # number of predictors
-    dof = n - p - 1  # degrees of freedom
+    k = len(coefficients)  # number of predictors
+    dof = n - k - 1  # degrees of freedom
     
-    residual_std = np.sqrt(np.sum(residuals**2) / dof)
+    # Residual standard error
+    residual_std = np.sqrt(np.sum(errors**2) / dof)
     
-    # Calculate standard errors and p-values
+    # Standard errors and p-values for each coefficient
     X_with_intercept = np.column_stack([np.ones(n), X])
-    var_covar_matrix = residual_std**2 * np.linalg.inv(X_with_intercept.T @ X_with_intercept)
-    se = np.sqrt(np.diag(var_covar_matrix))
+    var_coef = residual_std**2 * np.linalg.inv(X_with_intercept.T @ X_with_intercept).diagonal()
+    se_coefs = np.sqrt(var_coef)
     
-    t_stats = np.concatenate([[intercept], coefficients]) / se
+    t_stats = np.concatenate([[intercept], coefficients]) / se_coefs
     p_values = 2 * (1 - stats.t.cdf(np.abs(t_stats), dof))
     
     # Print results
     print("\nRegression Equation:")
-    print(f"Unitsales = {intercept:.2f} + ({coefficients[0]:.2f}) * Price + ({coefficients[1]:.2f}) * Adexp + ({coefficients[2]:.2f}) * Promexp")
+    equation = f"Unitsales = {intercept:.2f}"
+    for i, (name, coef) in enumerate(zip(feature_names, coefficients)):
+        equation += f" + ({coef:.2f}) * {name}"
+    print(equation)
     
-    print("\n--- Coefficients and Significance ---")
-    predictors = ['Intercept', 'Price', 'Adexp', 'Promexp']
-    coefs = [intercept] + list(coefficients)
+    print(f"\nIntercept: {intercept:.2f}")
+    print(f"R-squared: {r_squared:.4f}")
+    print(f"Adjusted R-squared: {1 - (1 - r_squared) * (n - 1) / dof:.4f}")
     
-    print(f"\n{'Variable':<15} {'Coefficient':<15} {'Std Error':<15} {'t-stat':<15} {'p-value':<15}")
-    print("-" * 75)
-    for i, var in enumerate(predictors):
-        print(f"{var:<15} {coefs[i]:<15.4f} {se[i]:<15.4f} {t_stats[i]:<15.4f} {p_values[i]:<15.6f}")
+    print("\n--- Coefficient Summary ---")
+    print(f"{'Variable':<15} {'Coefficient':<15} {'Std Error':<15} {'t-stat':<12} {'p-value':<12}")
+    print("-" * 70)
+    print(f"{'Intercept':<15} {intercept:<15.2f} {se_coefs[0]:<15.4f} {t_stats[0]:<12.4f} {p_values[0]:<12.6f}")
     
-    print(f"\nR-squared: {r_squared:.4f}")
+    for i, name in enumerate(feature_names):
+        print(f"{name:<15} {coefficients[i]:<15.2f} {se_coefs[i+1]:<15.4f} {t_stats[i+1]:<12.4f} {p_values[i+1]:<12.6f}")
+    
+    # Variable importance (based on p-values)
+    print("\n--- Variable Importance (by significance) ---")
+    coef_data = list(zip(feature_names, coefficients, p_values[1:]))
+    coef_data_sorted = sorted(coef_data, key=lambda x: x[2])
+    
+    for i, (name, coef, p_val) in enumerate(coef_data_sorted, 1):
+        significance = "***" if p_val < 0.001 else "**" if p_val < 0.01 else "*" if p_val < 0.05 else "ns"
+        print(f"{i}. {name}: p-value = {p_val:.6f} {significance}")
+    
+    print("\nSignificance codes: *** p<0.001, ** p<0.01, * p<0.05, ns = not significant")
     
     # Interpretation
-    print("\n--- Variable Importance (based on p-values) ---")
-    sorted_indices = np.argsort(p_values[1:])  # Exclude intercept
-    for idx in sorted_indices:
-        var_name = predictors[idx + 1]
-        p_val = p_values[idx + 1]
-        significance = "***" if p_val < 0.001 else "**" if p_val < 0.01 else "*" if p_val < 0.05 else "ns"
-        print(f"{var_name}: p-value = {p_val:.6f} {significance}")
-    
+    print("\n--- Interpretation ---")
     alpha = 0.05
-    print(f"\nNote: Variables with p-value < {alpha} are statistically significant")
-    print("Most important variable (lowest p-value): " + predictors[1:][sorted_indices[0]])
+    significant_vars = [name for name, _, p_val in coef_data if p_val < alpha]
     
-    return model
+    if significant_vars:
+        print(f"Significant predictors (α = {alpha}): {', '.join(significant_vars)}")
+    else:
+        print(f"No significant predictors at α = {alpha}")
+    
+    coefficients_info = {
+        'names': feature_names,
+        'values': coefficients,
+        'p_values': p_values[1:],
+        'intercept': intercept
+    }
+    
+    return model, predictions, r_squared, coefficients_info
 
 
 def predict_scenarios(model):
     """
-    Predict unit sales for two different pricing and marketing scenarios.
+    Predict unit sales for two business scenarios.
     
     Parameters:
     -----------
     model : LinearRegression
-        Fitted multiple regression model
+        Fitted multiple linear regression model
+        
+    Returns:
+    --------
+    pd.DataFrame
+        DataFrame with scenario predictions
     """
     print("\n" + "="*60)
-    print("PREDICTION SCENARIOS")
+    print("SCENARIO PREDICTIONS")
     print("="*60)
     
     # Define scenarios
     scenarios = pd.DataFrame({
         'Price': [9.1, 8.1],
-        'Adexp': [52.0, 50.0],
-        'Promexp': [61.0, 60.0]
+        'Adexp': [52, 50],
+        'Promexp': [61, 60]
     })
-    
-    print("\nScenario 1: Price=$9.1, Adexp=$52,000, Promexp=$61,000")
-    print("Scenario 2: Price=$8.1, Adexp=$50,000, Promexp=$60,000")
     
     # Make predictions
     predictions = model.predict(scenarios)
     
-    print("\n--- Predicted Unit Sales ---")
-    for i, pred in enumerate(predictions, 1):
-        print(f"Scenario {i}: {pred:,.2f} units")
+    # Display results
+    print("\nScenario 1:")
+    print(f"  Price: ${scenarios.loc[0, 'Price']}")
+    print(f"  Advertising Expenditure: ${scenarios.loc[0, 'Adexp']}k")
+    print(f"  Promotion Expenditure: ${scenarios.loc[0, 'Promexp']}k")
+    print(f"  Predicted Unit Sales: {predictions[0]:,.0f}")
     
-    # Determine best scenario
-    best_scenario = np.argmax(predictions) + 1
-    max_sales = np.max(predictions)
+    print("\nScenario 2:")
+    print(f"  Price: ${scenarios.loc[1, 'Price']}")
+    print(f"  Advertising Expenditure: ${scenarios.loc[1, 'Adexp']}k")
+    print(f"  Promotion Expenditure: ${scenarios.loc[1, 'Promexp']}k")
+    print(f"  Predicted Unit Sales: {predictions[1]:,.0f}")
     
-    print("\n--- CONCLUSION ---")
-    print(f"Scenario {best_scenario} is expected to yield the maximum unit sales:")
-    print(f"Maximum Unit Sales: {max_sales:,.2f} units")
+    # Comparison
+    difference = predictions[1] - predictions[0]
+    print("\n--- Comparison ---")
+    print(f"Difference in predicted sales: {difference:,.0f} units")
     
-    if best_scenario == 1:
-        print("\nRecommendation: Choose Scenario 1")
-        print("Despite higher price, the increased advertising and promotion budget")
-        print("is expected to generate more unit sales.")
+    if difference > 0:
+        percent_increase = (difference / predictions[0]) * 100
+        print(f"Scenario 2 is better by {difference:,.0f} units ({percent_increase:.2f}% increase)")
+        print("\n✓ RECOMMENDATION: Choose Scenario 2")
+        print(f"  - Lower price (${scenarios.loc[1, 'Price']} vs ${scenarios.loc[0, 'Price']})")
+        print(f"  - Lower marketing costs")
+        print(f"  - Higher projected sales")
     else:
-        print("\nRecommendation: Choose Scenario 2")
-        print("The lower price point combined with marketing expenditure")
-        print("is expected to generate more unit sales.")
+        percent_increase = (abs(difference) / predictions[1]) * 100
+        print(f"Scenario 1 is better by {abs(difference):,.0f} units ({percent_increase:.2f}% increase)")
+        print("\n✓ RECOMMENDATION: Choose Scenario 1")
+    
+    scenarios['Predicted_Sales'] = predictions
+    return scenarios
 
 
 def main():
     """
-    Main function to orchestrate the entire analysis pipeline.
+    Main function to orchestrate the analysis workflow.
     """
-    # Set up argument parser for command-line usage
+    # Set up argument parser
     parser = argparse.ArgumentParser(
-        description='Toy Sales Regression Analysis - Python Version'
+        description='Toy Sales Regression Analysis - Convert R notebook to Python'
     )
     parser.add_argument(
         '--data',
         type=str,
         default='../datasets/Toy_sales_csv.csv',
-        help='Path to the toy sales CSV file (default: ../datasets/Toy_sales_csv.csv)'
+        help='Path to the toy sales CSV file'
     )
     parser.add_argument(
         '--no-plot',
         action='store_true',
-        help='Skip plotting visualizations'
+        help='Skip generating plots'
     )
     
     args = parser.parse_args()
     
-    # Print header
-    print("="*60)
-    print("TOY SALES REGRESSION ANALYSIS")
-    print("="*60)
-    print("Python implementation of R notebook analysis")
-    print("="*60)
+    # Set style for plots
+    sns.set_style("whitegrid")
+    plt.rcParams['figure.dpi'] = 100
     
-    # Load data
+    # Step 1: Load data
     df = load_data(args.data)
-    if df is None:
-        return
     
-    # Simple Linear Regression
+    # Step 2: Simple Linear Regression
     slr_model, slr_predictions, slr_errors, slr_coefs, slr_r2, slr_pval = simple_linear_regression(df)
     
-    # Plot Simple Linear Regression (unless --no-plot flag is used)
+    # Step 3: Visualization (if not disabled)
     if not args.no_plot:
-        plot_simple_regression(df, slr_predictions)
+        plot_simple_regression(df, slr_predictions, '../datasets/simple_regression_plot.png')
     
-    # Multiple Linear Regression
-    mlr_model = multiple_linear_regression(df)
+    # Step 4: Multiple Linear Regression
+    mlr_model, mlr_predictions, mlr_r2, mlr_coefs = multiple_linear_regression(df)
     
-    # Prediction Scenarios
-    predict_scenarios(mlr_model)
+    # Step 5: Scenario Predictions
+    scenario_results = predict_scenarios(mlr_model)
     
+    # Final summary
     print("\n" + "="*60)
-    print("ANALYSIS COMPLETE!")
+    print("ANALYSIS COMPLETE")
+    print("="*60)
+    print(f"\nSimple Linear Regression R²: {slr_r2:.4f}")
+    print(f"Multiple Linear Regression R²: {mlr_r2:.4f}")
+    print(f"Improvement: {(mlr_r2 - slr_r2):.4f} ({((mlr_r2 - slr_r2)/slr_r2)*100:.2f}%)")
+    print("\nAll analyses completed successfully! ✓")
     print("="*60)
 
 
 if __name__ == "__main__":
-    # Set plotting style
-    sns.set_style("whitegrid")
-    plt.rcParams['figure.figsize'] = (10, 6)
-    
-    # Run main analysis
     main()
