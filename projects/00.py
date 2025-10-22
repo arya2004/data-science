@@ -13,7 +13,7 @@ This script illustrates basic R operations translated to Python, using:
 - Type checking and type conversion
 - Complex numbers and floating-point sequences
 
-Author: Your Name
+Author: Luckman Khan
 Date: 2025-10-22
 """
 
